@@ -8,8 +8,8 @@ FROM nvidia/cuda:${NVIDIA_CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap-
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
-RUN apt-get update && \
-    apt-get install -y git ccache cmake ninja-build build-essential \
+RUN apt update && \
+    apt install -y git ccache cmake ninja-build build-essential \
         libboost-program-options-dev libboost-graph-dev libboost-system-dev libeigen3-dev \
         libopenimageio-dev openimageio-tools libmetis-dev libgoogle-glog-dev libgtest-dev \
         libgmock-dev libsqlite3-dev libglew-dev qt6-base-dev libqt6opengl6-dev \
@@ -29,7 +29,7 @@ RUN git clone --depth 1 https://github.com/colmap/colmap.git /colmap && \
 # Stage 2: Build Brush
 # ==========================================
 FROM rust AS brush-builder
-RUN apt-get update && apt-get install -y git
+RUN apt update && apt install -y git
 
 # Shallow clone and build Brush
 RUN git clone --depth 1 https://github.com/ArthurBrussee/brush.git /build
@@ -46,16 +46,16 @@ ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=all
 
 # 1. Install runtime dependencies, Python, and wget
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends --no-install-suggests \
+RUN apt update && apt upgrade -y && \
+    apt install -y --no-install-recommends --no-install-suggests \
         libboost-program-options1.83.0 libc6 libomp5 libopengl0 libmetis5 \
         libceres4t64 libopenimageio2.4t64 libgcc-s1 libgl1 libglew2.2 \
         libgoogle-glog0v6t64 libqt6core6 libqt6gui6 libqt6widgets6 \
         libqt6openglwidgets6 libqt6svg6 libcurl4 libssl3t64 \
         libmkl-locale libmkl-intel-lp64 libmkl-intel-thread libmkl-core \
         libvulkan1 mesa-vulkan-drivers \
-        python3 python3-pip wget unzip tmux neovim && \
-    apt-get clean && \
+        python3 python3-pip wget unzip tmux neovim curl && \
+    apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Install JupyterLab 

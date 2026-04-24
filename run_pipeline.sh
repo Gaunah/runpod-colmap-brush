@@ -48,8 +48,7 @@ colmap image_undistorter \
  --image_path "$IMAGES_DIR" \
  --input_path "$SPARSE/0" \
  --output_path "$DENSE" \
- --output_type COLMAP \
- --max_image_size 4000
+ --output_type COLMAP
 
 echo "============================"
 echo "Export PLY"
@@ -64,7 +63,6 @@ echo "Start Brush Training"
 echo "============================"
 brush "$PROJECT_DIR" \
  --total-train-iters 30000 \
- --max-resolution 4000 \
  --export-every 10000 \
  --export-path "$PROJECT_DIR"
 

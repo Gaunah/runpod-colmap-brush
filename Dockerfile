@@ -80,5 +80,11 @@ RUN chmod +x /app/run_pipeline.sh
 # 7. Expose Jupyter's default port
 EXPOSE 8888
 
-# 8. Start JupyterLab automatically
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--ServerApp.allow_origin='*'", "--ServerApp.allow_remote_access=True", "--ServerApp.disable_check_xsrf=True", "--IdentityProvider.token=''", "--ServerApp.password=''"]
+# 8. Start JupyterLab automatically (Using shell form so $JUPYTER_PASSWORD is evaluated)
+CMD jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+    --ServerApp.allow_origin='*' \
+    --ServerApp.allow_remote_access=True \
+    --ServerApp.disable_check_xsrf=True \
+    --IdentityProvider.token="$JUPYTER_PASSWORD" \
+    --ServerApp.password=''
+

@@ -59,6 +59,13 @@ colmap model_converter \
  --output_type PLY
 
 echo "============================"
+echo "Moving Data to Fast Local NVMe"
+echo "============================"
+mkdir -p /local_temp/dataset
+cp -r "$IMAGES_DIR" /local_temp/dataset/images
+cp -r "$SPARSE" /local_temp/dataset/sparse
+
+echo "============================"
 echo "Start Brush Training"
 echo "============================"
 brush "$PROJECT_DIR" \

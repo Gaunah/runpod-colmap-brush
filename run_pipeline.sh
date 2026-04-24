@@ -63,7 +63,7 @@ echo "============================"
 echo "Start Brush Training"
 echo "============================"
 brush "$PROJECT_DIR" \
- --total-steps 30000 \
+ --total-train-iters 30000 \
  --max-resolution 4000 \
  --export-every 10000 \
  --export-path "$PROJECT_DIR"

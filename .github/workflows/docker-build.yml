@@ -31,8 +31,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/colmap-brush-runpod:${{ github.event.inputs.version_tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/colmap-brush-runpod:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:${{ github.event.inputs.version_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:latest
           # Keep the caching to save build time
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/colmap-brush-runpod:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/colmap-brush-runpod:buildcache,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:buildcache,mode=max

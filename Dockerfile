@@ -6,6 +6,7 @@ ARG NVIDIA_CUDA_VERSION=12.9.1
 # ==========================================
 FROM nvidia/cuda:${NVIDIA_CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap-builder
 ENV DEBIAN_FRONTEND=noninteractive
+ARG COLMAP_REF=4.0.4
 
 # Install build dependencies
 RUN apt update && \
@@ -19,7 +20,7 @@ RUN apt update && \
 RUN mkdir -p /usr/include/opencv4
 
 # Shallow clone and build COLMAP
-RUN git clone --depth 1 https://github.com/colmap/colmap.git /colmap && \
+RUN git clone --depth 1 --branch ${COLMAP_REF} https://github.com/colmap/colmap.git /colmap && \
     cd /colmap && \
     mkdir -p build && cd build && \
     cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=all-major -DCMAKE_INSTALL_PREFIX=/colmap-install -DBLA_VENDOR=Intel10_64lp && \

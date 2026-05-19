@@ -1,19 +1,46 @@
 name: Build and Push Docker Image to Docker Hub
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
     inputs:
       version_tag:
         description: 'Image version tag (e.g., 1.0, 1.1)'
         required: true
+        type: string
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: runpod-colmap-brush
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+    timeout-minutes: 120
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+
+      # Frees ~25GB on the runner. The CUDA base image + COLMAP build + Rust
+      # toolchain easily blow past the default 14GB free, causing late-stage
+      # ENOSPC failures.
+      - name: Free disk space on runner
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -25,14 +52,20 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:${{ github.event.inputs.version_tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:latest
-          # Keep the caching to save build time
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/runpod-colmap-brush:buildcache,mode=max
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Image digest
+        run: |
+          echo "Pushed:"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version_tag }}"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest"

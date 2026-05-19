@@ -111,5 +111,30 @@ brush "$PROJECT_DIR" \
     --export-every 10000 \
     --export-path "$PROJECT_DIR"
 
+echo "============================"
+echo "Compressing PLY -> SOG"
+echo "============================"
+
+# Brush writes exports like export_10000.ply, export_20000.ply, export_30000.ply
+# into $PROJECT_DIR. Grab the highest-iteration one.
+LATEST_PLY=$(ls -t "$PROJECT_DIR"/export_*.ply 2>/dev/null | head -n 1)
+
+if [ -z "$LATEST_PLY" ]; then
+    echo "WARNING: no Brush export_*.ply found in $PROJECT_DIR, skipping SOG."
+else
+    SOG_DIR="$PROJECT_DIR/sog"
+    mkdir -p "$SOG_DIR"
+    echo "Compressing: $LATEST_PLY"
+    sogs-compress \
+        --ply "$LATEST_PLY" \
+        --output-dir "$SOG_DIR"
+
+    # Bundle the WebP+JSON output into a single .sog (zip) file for easy transfer
+    (cd "$SOG_DIR" && zip -qr "$PROJECT_DIR/scene.sog" .)
+    echo "SOG written: $PROJECT_DIR/scene.sog"
+    echo "Original PLY: $(du -h "$LATEST_PLY" | cut -f1)"
+    echo "Compressed:   $(du -h "$PROJECT_DIR/scene.sog" | cut -f1)"
+fi
+
 echo "Brush Gaussian Splat finished"
 echo "Output: $PROJECT_DIR"

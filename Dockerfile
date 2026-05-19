@@ -60,6 +60,11 @@ RUN apt update && apt upgrade -y && \
 
 # 2. Install JupyterLab 
 RUN pip3 install jupyterlab --break-system-packages
+# 2b. Install PyTorch + SOGS compressor
+RUN pip3 install --break-system-packages --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cu129
+RUN pip3 install --break-system-packages --no-cache-dir \
+    sogs-compression
 
 # 3. Copy binaries from builders
 COPY --from=colmap-builder /colmap-install/ /usr/local/

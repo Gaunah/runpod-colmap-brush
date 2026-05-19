@@ -1,76 +1,115 @@
 #!/bin/bash
+set -euo pipefail
 
 # ============================
-# Check for image folder
+# Parse input: local folder OR zip URL
 # ============================
-IMAGES_DIR=$1
-if [ -z "$IMAGES_DIR" ]; then
-    echo "Please provide the path to your images folder."
-    echo "Usage: bash run_pipeline.sh /workspace/images"
+INPUT=${1:-}
+if [ -z "$INPUT" ]; then
+    echo "Usage: bash run_pipeline.sh <images_folder | zip_url>"
+    echo "  Local:  bash run_pipeline.sh /workspace/images"
+    echo "  Remote: bash run_pipeline.sh https://example.com/dataset.zip"
     exit 1
 fi
 
-# Set project folders relative to images
+# ============================
+# Stage everything on fast local NVMe up front
+# ============================
+LOCAL_ROOT="/local_temp/dataset"
+mkdir -p "$LOCAL_ROOT"
+
+echo "============================"
+echo "Staging Dataset on Local NVMe"
+echo "============================"
+
+if [[ "$INPUT" =~ ^https?:// ]]; then
+    # Remote zip: download + unzip directly on NVMe
+    echo "Downloading: $INPUT"
+    pushd "$LOCAL_ROOT" > /dev/null
+    curl -LJO "$INPUT"
+    ZIP_FILE=$(ls -t ./*.zip 2>/dev/null | head -n 1 || true)
+    if [ -z "$ZIP_FILE" ]; then
+        echo "ERROR: no .zip file was downloaded."
+        exit 1
+    fi
+    echo "Unzipping: $ZIP_FILE"
+    unzip -q "$ZIP_FILE"
+    rm "$ZIP_FILE"
+    popd > /dev/null
+
+    # Look for an 'images' folder anywhere inside the extracted tree
+    IMAGES_DIR=$(find "$LOCAL_ROOT" -type d -name "images" | head -n 1)
+    if [ -z "$IMAGES_DIR" ]; then
+        echo "ERROR: no 'images' folder found inside the archive."
+        exit 1
+    fi
+else
+    # Local folder: copy to NVMe
+    if [ ! -d "$INPUT" ]; then
+        echo "ERROR: '$INPUT' is not a directory."
+        exit 1
+    fi
+    echo "Copying: $INPUT -> $LOCAL_ROOT/images"
+    cp -r "$INPUT" "$LOCAL_ROOT/images"
+    IMAGES_DIR="$LOCAL_ROOT/images"
+fi
+
+# All work now lives on the NVMe
 PROJECT_DIR=$(dirname "$IMAGES_DIR")
 DATABASE="$PROJECT_DIR/database.db"
 SPARSE="$PROJECT_DIR/sparse"
 DENSE="$PROJECT_DIR/dense"
+mkdir -p "$SPARSE" "$DENSE"
 
-mkdir -p "$SPARSE"
-mkdir -p "$DENSE"
+echo "Project dir: $PROJECT_DIR"
+echo "Images dir:  $IMAGES_DIR"
 
 echo "============================"
 echo "COLMAP: Feature Extraction"
 echo "============================"
 colmap feature_extractor \
- --database_path "$DATABASE" \
- --image_path "$IMAGES_DIR" \
- --ImageReader.camera_model "PINHOLE"
+    --database_path "$DATABASE" \
+    --image_path "$IMAGES_DIR" \
+    --ImageReader.camera_model "PINHOLE"
 
 echo "============================"
 echo "COLMAP: Matching"
 echo "============================"
 colmap exhaustive_matcher \
- --database_path "$DATABASE" \
+    --database_path "$DATABASE"
 
 echo "============================"
 echo "COLMAP: Sparse Mapping"
 echo "============================"
 colmap mapper \
- --database_path "$DATABASE" \
- --image_path "$IMAGES_DIR" \
- --output_path "$SPARSE"
+    --database_path "$DATABASE" \
+    --image_path "$IMAGES_DIR" \
+    --output_path "$SPARSE"
 
 echo "============================"
 echo "COLMAP: Dense Prep"
 echo "============================"
 colmap image_undistorter \
- --image_path "$IMAGES_DIR" \
- --input_path "$SPARSE/0" \
- --output_path "$DENSE" \
- --output_type COLMAP
+    --image_path "$IMAGES_DIR" \
+    --input_path "$SPARSE/0" \
+    --output_path "$DENSE" \
+    --output_type COLMAP
 
 echo "============================"
 echo "Export PLY"
 echo "============================"
 colmap model_converter \
- --input_path "$SPARSE/0" \
- --output_path "$SPARSE/model.ply" \
- --output_type PLY
-
-echo "============================"
-echo "Moving Data to Fast Local NVMe"
-echo "============================"
-mkdir -p /local_temp/dataset
-cp -r "$IMAGES_DIR" /local_temp/dataset/images
-cp -r "$SPARSE" /local_temp/dataset/sparse
+    --input_path "$SPARSE/0" \
+    --output_path "$SPARSE/model.ply" \
+    --output_type PLY
 
 echo "============================"
 echo "Start Brush Training"
 echo "============================"
 brush "$PROJECT_DIR" \
- --total-train-iters 30000 \
- --export-every 10000 \
- --export-path "$PROJECT_DIR"
+    --total-train-iters 30000 \
+    --export-every 10000 \
+    --export-path "$PROJECT_DIR"
 
 echo "Brush Gaussian Splat finished"
+echo "Output: $PROJECT_DIR"

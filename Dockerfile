@@ -74,19 +74,13 @@ WORKDIR /workspace
 RUN mkdir /app
 RUN wget https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin -P /app/
 
-# 6. Copy the pipeline script and make it executable
-# (Ensure run_pipeline.sh is in the same local directory as this Dockerfile)
 COPY run_pipeline.sh /app/run_pipeline.sh
 RUN chmod +x /app/run_pipeline.sh
+COPY start-jupyter.sh /app/start-jupyter.sh
+RUN chmod +x /app/start-jupyter.sh
 
 # 7. Expose Jupyter's default port
 EXPOSE 8888
 
 # 8. Start JupyterLab automatically (Using shell form so $JUPYTER_PASSWORD is evaluated)
-CMD jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
-    --ServerApp.allow_origin='*' \
-    --ServerApp.allow_remote_access=True \
-    --ServerApp.disable_check_xsrf=True \
-    --IdentityProvider.token="$JUPYTER_PASSWORD" \
-    --ServerApp.password=''
-
+CMD ["/app/start-jupyter.sh"]

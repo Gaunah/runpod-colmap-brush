@@ -77,7 +77,7 @@ colmap feature_extractor \
     --image_path "$IMAGES_DIR" \
     --ImageReader.camera_model "OPENCV" \
     --ImageReader.single_camera 1 \
-    --SiftExtraction.use_gpu 1 \
+    --FeatureExtraction.num_threads $(( $(nproc) / 2 )) \
     --SiftExtraction.estimate_affine_shape 1 \
     --SiftExtraction.domain_size_pooling 1
 

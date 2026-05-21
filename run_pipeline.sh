@@ -86,9 +86,20 @@ colmap feature_extractor \
 # ============================
 # Prefer spatial matching when GPS is in EXIF (DJI always has it). Fall back
 # to vocab tree for larger sets, exhaustive only for very small ones.
-HAS_GPS=$(sqlite3 "$DATABASE" \
-    "SELECT COUNT(*) FROM images WHERE prior_tx != 0 OR prior_ty != 0 OR prior_tz != 0;" \
-    2>/dev/null || echo 0)
+HAS_POSE_PRIORS_TABLE=$(sqlite3 "$DATABASE" \
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pose_priors';" \
+    2>/dev/null || echo "")
+
+if [ -n "$HAS_POSE_PRIORS_TABLE" ]; then
+    # coordinate_system: 0 = WGS84 (GPS), 1 = Cartesian, -1 = undefined
+    HAS_GPS=$(sqlite3 "$DATABASE" \
+        "SELECT COUNT(*) FROM pose_priors WHERE position IS NOT NULL AND coordinate_system = 0;" \
+        2>/dev/null || echo 0)
+else
+    HAS_GPS=$(sqlite3 "$DATABASE" \
+        "SELECT COUNT(*) FROM images WHERE prior_tx IS NOT NULL AND (prior_tx != 0 OR prior_ty != 0 OR prior_tz != 0);" \
+        2>/dev/null || echo 0)
+fi
 
 echo "============================"
 if [ "$HAS_GPS" -gt 0 ]; then
@@ -164,14 +175,6 @@ colmap image_undistorter \
     --output_type COLMAP
 
 echo "============================"
-echo "Export sparse PLY"
-echo "============================"
-colmap model_converter \
-    --input_path "$LARGEST_MODEL" \
-    --output_path "$PROJECT_DIR/sparse_points.ply" \
-    --output_type PLY
-
-echo "============================"
 echo "Start Brush Training (on undistorted dense dir)"
 echo "============================"
 # Pointing Brush at $DENSE, not $PROJECT_DIR, so it trains on rectified images
@@ -209,7 +212,6 @@ echo "Pipeline complete."
 echo "Outputs in: $PROJECT_DIR"
 echo "  - sparse model:     $LARGEST_MODEL"
 echo "  - undistorted:      $DENSE"
-echo "  - sparse PLY:       $PROJECT_DIR/sparse_points.ply"
 echo "  - splat PLY:        ${LATEST_PLY:-<missing>}"
 echo "  - compressed SOG:   $PROJECT_DIR/scene.sog"
 echo "============================"

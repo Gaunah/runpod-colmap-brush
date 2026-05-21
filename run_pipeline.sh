@@ -72,14 +72,33 @@ echo "============================"
 # OPENCV model handles DJI lens distortion; single_camera shares intrinsics
 # across the whole set since all photos came from the same lens.
 # affine_shape + domain_size_pooling produce stronger, more repeatable features.
-colmap feature_extractor \
-    --database_path "$DATABASE" \
-    --image_path "$IMAGES_DIR" \
-    --ImageReader.camera_model "OPENCV" \
-    --ImageReader.single_camera 1 \
-    --FeatureExtraction.num_threads $(( $(nproc) / 2 )) \
-    --SiftExtraction.estimate_affine_shape 1 \
-    --SiftExtraction.domain_size_pooling 1
+#
+# Retry loop: start at nproc/1 (full) and step the divisor up to nproc/5 on failure
+MAX_DIVISOR=5
+for DIVISOR in $(seq 1 $MAX_DIVISOR); do
+    THREADS=$(( $(nproc) / DIVISOR ))
+    [ "$THREADS" -lt 1 ] && THREADS=1
+    echo "Attempt $DIVISOR/$MAX_DIVISOR: nproc/$DIVISOR = $THREADS threads"
+    if colmap feature_extractor \
+        --database_path "$DATABASE" \
+        --image_path "$IMAGES_DIR" \
+        --ImageReader.camera_model "OPENCV" \
+        --ImageReader.single_camera 1 \
+        --FeatureExtraction.num_threads "$THREADS" \
+        --SiftExtraction.estimate_affine_shape 1 \
+        --SiftExtraction.domain_size_pooling 1
+    then
+        echo "Feature extraction succeeded."
+        break
+    fi
+    echo "feature_extractor failed."
+    if [ "$DIVISOR" -eq "$MAX_DIVISOR" ]; then
+        echo "ERROR: feature extraction failed after $MAX_DIVISOR attempts."
+        exit 1
+    fi
+    echo "Retrying with fewer threads..."
+    sleep 2
+done
 
 # ============================
 # COLMAP: Matching (auto-pick strategy)

@@ -55,13 +55,13 @@ RUN apt update && apt upgrade -y && \
         libqt6openglwidgets6 libqt6svg6 libcurl4 libssl3t64 \
         libmkl-locale libmkl-intel-lp64 libmkl-intel-thread libmkl-core \
         libvulkan1 mesa-vulkan-drivers \
-        python3 python3-pip wget unzip tmux neovim curl sqlite3 && \
+        python3 python3-pip wget unzip tmux neovim curl sqlite3 npm && \
+    npm install -g @playcanvas/splat-transform && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Install JupyterLab 
-RUN pip3 install sogs jupyterlab --break-system-packages --no-cache-dir
-RUN pip3 install torch --break-system-packages --no-cache-dir --index-url https://download.pytorch.org/whl/cu129
+RUN pip3 install jupyterlab --break-system-packages --no-cache-dir
 
 # 3. Copy binaries from builders
 COPY --from=colmap-builder /colmap-install/ /usr/local/

@@ -187,24 +187,18 @@ brush "$DENSE" \
 echo "Brush Gaussian Splat finished"
 
 echo "============================"
-echo "Compressing PLY -> SOG"
+echo "Compressing PLY -> SOG (splat-transform)"
 echo "============================"
 LATEST_PLY=$(ls -t "$PROJECT_DIR"/export_*.ply 2>/dev/null | head -n 1)
 
 if [ -z "$LATEST_PLY" ]; then
     echo "WARNING: no Brush export_*.ply found in $PROJECT_DIR, skipping SOG."
 else
-    SOG_DIR="$PROJECT_DIR/sog"
-    mkdir -p "$SOG_DIR"
-    echo "Compressing: $LATEST_PLY"
-    sogs-compress \
-        --ply "$LATEST_PLY" \
-        --output-dir "$SOG_DIR"
-
-    (cd "$SOG_DIR" && zip -qr "$PROJECT_DIR/scene.sog" .)
-    echo "SOG written: $PROJECT_DIR/scene.sog"
+    SOG_OUT="$PROJECT_DIR/scene.sog"
+    echo "Compressing: $LATEST_PLY -> $SOG_OUT"
+    splat-transform "$LATEST_PLY" "$SOG_OUT"
     echo "Original PLY: $(du -h "$LATEST_PLY" | cut -f1)"
-    echo "Compressed:   $(du -h "$PROJECT_DIR/scene.sog" | cut -f1)"
+    echo "Compressed:   $(du -h "$SOG_OUT" | cut -f1)"
 fi
 
 echo "============================"

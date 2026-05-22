@@ -15,7 +15,7 @@ fi
 VOCAB_TREE="/app/vocab_tree_flickr100K_words32K.bin"
 
 # ============================
-# Stage everything on fast local NVMe up front
+# Stage everything on fast local NVMe up front (skip if already staged)
 # ============================
 LOCAL_ROOT="/local_temp/dataset"
 mkdir -p "$LOCAL_ROOT"
@@ -24,11 +24,17 @@ echo "============================"
 echo "Staging Dataset on Local NVMe"
 echo "============================"
 
-if [[ "$INPUT" =~ ^https?:// ]]; then
+# If a previous run already staged the images, reuse them.
+EXISTING_IMAGES=$(find "$LOCAL_ROOT" -type d -name "images" 2>/dev/null | head -n 1)
+if [ -n "$EXISTING_IMAGES" ] && [ -n "$(ls -A "$EXISTING_IMAGES" 2>/dev/null)" ]; then
+    echo "Images already staged at: $EXISTING_IMAGES"
+    echo "Skipping download/copy. (Delete $LOCAL_ROOT to force a fresh stage.)"
+    IMAGES_DIR="$EXISTING_IMAGES"
+elif [[ "$INPUT" =~ ^https?:// ]]; then
     # Remote zip: download + unzip directly on NVMe
     echo "Downloading: $INPUT"
     pushd "$LOCAL_ROOT" > /dev/null
-    curl -LJO "$INPUT"
+    curl -LJOC "$INPUT"
     ZIP_FILE=$(ls -t ./*.zip 2>/dev/null | head -n 1 || true)
     if [ -z "$ZIP_FILE" ]; then
         echo "ERROR: no .zip file was downloaded."

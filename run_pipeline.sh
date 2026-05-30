@@ -34,14 +34,21 @@ elif [[ "$INPUT" =~ ^https?:// ]]; then
     # Remote zip: download + unzip directly on NVMe
     echo "Downloading: $INPUT"
     pushd "$LOCAL_ROOT" > /dev/null
-    curl -LJOC "$INPUT"
+    aria2c \
+        --continue=true \
+        --max-connection-per-server=16 \
+        --split=16 \
+        --min-split-size=1M \
+        --auto-file-renaming=false \
+        --allow-overwrite=true \
+        "$INPUT"
     ZIP_FILE=$(ls -t ./*.zip 2>/dev/null | head -n 1 || true)
     if [ -z "$ZIP_FILE" ]; then
         echo "ERROR: no .zip file was downloaded."
         exit 1
     fi
     echo "Unzipping: $ZIP_FILE"
-    unzip -q "$ZIP_FILE"
+    7z x -y -bso0 -bsp0 "$ZIP_FILE"
     rm "$ZIP_FILE"
     popd > /dev/null
 

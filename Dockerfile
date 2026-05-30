@@ -55,7 +55,7 @@ RUN apt update && apt upgrade -y && \
         libqt6openglwidgets6 libqt6svg6 libcurl4 libssl3t64 \
         libmkl-locale libmkl-intel-lp64 libmkl-intel-thread libmkl-core \
         libvulkan1 mesa-vulkan-drivers \
-        python3 python3-pip wget unzip tmux neovim curl sqlite3 npm && \
+    python3 python3-pip wget 7zip tmux neovim curl aria2 sqlite3 npm && \
     npm install -g @playcanvas/splat-transform && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*

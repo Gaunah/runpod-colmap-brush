@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# check for GPU
+nvidia-smi -L >/dev/null 2>&1 || { echo "ERROR: no GPU visible; Brush needs CUDA."; exit 1; }
+
 # ============================
 # Parse input: local folder OR zip URL
 # ============================
@@ -221,7 +224,7 @@ echo "Brush Gaussian Splat finished"
 echo "============================"
 echo "Compressing PLY -> SOG (splat-transform)"
 echo "============================"
-LATEST_PLY=$(ls -t "$PROJECT_DIR"/export_*.ply 2>/dev/null | head -n 1)
+LATEST_PLY=$(ls -t "$PROJECT_DIR"/export_*.ply 2>/dev/null | head -n 1 || true)
 
 if [ -z "$LATEST_PLY" ]; then
     echo "WARNING: no Brush export_*.ply found in $PROJECT_DIR, skipping SOG."
@@ -241,3 +244,11 @@ echo "  - undistorted:      $DENSE"
 echo "  - splat PLY:        ${LATEST_PLY:-<missing>}"
 echo "  - compressed SOG:   $PROJECT_DIR/scene.sog"
 echo "============================"
+
+# Persist deliverables off ephemeral NVMe before the pod can vanish
+PERSIST_DIR="/workspace/outputs/$(basename "$PROJECT_DIR")_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$PERSIST_DIR"
+cp -v "$PROJECT_DIR/scene.sog" "$PERSIST_DIR/" 2>/dev/null || true
+[ -n "${LATEST_PLY:-}" ] && cp -v "$LATEST_PLY" "$PERSIST_DIR/" || true
+cp -rv "$LARGEST_MODEL" "$PERSIST_DIR/sparse" || true
+

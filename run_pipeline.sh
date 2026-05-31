@@ -23,13 +23,34 @@ VOCAB_TREE="/app/vocab_tree_flickr100K_words32K.bin"
 LOCAL_ROOT="/local_temp/dataset"
 mkdir -p "$LOCAL_ROOT"
 
+# Locate the staged image directory: the first top-level folder under
+# $LOCAL_ROOT whose subtree contains image files. Takes the first folder from
+# the zip that holds images. Recurses, so nested layouts (wrapper/sub/*.jpg)
+# work: COLMAP reads --image_path recursively, so we hand it the top folder
+# as-is. Skips: sparse/ + dense/ (created by later stages on a re-run), macOS
+# "__MACOSX" wrapper dirs, and AppleDouble "._*" sidecar files (junk that
+# carries a real image extension but isn't a readable image).
+find_image_dir() {
+    local d
+    while IFS= read -r d; do
+        if find "$d" -type f ! -name '._*' \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+               -o -iname '*.tif' -o -iname '*.tiff' \) -print -quit | grep -q .; then
+            printf '%s\n' "$d"
+            return 0
+        fi
+    done < <(find "$LOCAL_ROOT" -mindepth 1 -maxdepth 1 -type d \
+                  ! -name sparse ! -name dense ! -name __MACOSX | sort)
+    return 1
+}
+
 echo "============================"
 echo "Staging Dataset on Local NVMe"
 echo "============================"
 
 # If a previous run already staged the images, reuse them.
-EXISTING_IMAGES=$(find "$LOCAL_ROOT" -type d -name "images" 2>/dev/null | head -n 1)
-if [ -n "$EXISTING_IMAGES" ] && [ -n "$(ls -A "$EXISTING_IMAGES" 2>/dev/null)" ]; then
+EXISTING_IMAGES=$(find_image_dir || true)
+if [ -n "$EXISTING_IMAGES" ]; then
     echo "Images already staged at: $EXISTING_IMAGES"
     echo "Skipping download/copy. (Delete $LOCAL_ROOT to force a fresh stage.)"
     IMAGES_DIR="$EXISTING_IMAGES"
@@ -55,9 +76,9 @@ elif [[ "$INPUT" =~ ^https?:// ]]; then
     rm "$ZIP_FILE"
     popd > /dev/null
 
-    IMAGES_DIR=$(find "$LOCAL_ROOT" -type d -name "images" | head -n 1)
+    IMAGES_DIR=$(find_image_dir || true)
     if [ -z "$IMAGES_DIR" ]; then
-        echo "ERROR: no 'images' folder found inside the archive."
+        echo "ERROR: no folder containing images found inside the archive."
         exit 1
     fi
 else
@@ -76,7 +97,7 @@ SPARSE="$PROJECT_DIR/sparse"
 DENSE="$PROJECT_DIR/dense"
 mkdir -p "$SPARSE" "$DENSE"
 
-NUM_IMAGES=$(find "$IMAGES_DIR" -maxdepth 1 -type f \
+NUM_IMAGES=$(find "$IMAGES_DIR" -type f ! -name '._*' \
     \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tif" -o -iname "*.tiff" \) | wc -l)
 
 echo "Project dir: $PROJECT_DIR"
@@ -251,4 +272,3 @@ mkdir -p "$PERSIST_DIR"
 cp -v "$PROJECT_DIR/scene.sog" "$PERSIST_DIR/" 2>/dev/null || true
 [ -n "${LATEST_PLY:-}" ] && cp -v "$LATEST_PLY" "$PERSIST_DIR/" || true
 cp -rv "$LARGEST_MODEL" "$PERSIST_DIR/sparse" || true
-

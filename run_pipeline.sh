@@ -110,8 +110,8 @@ echo "============================"
 # across the whole set since all photos came from the same lens.
 # affine_shape + domain_size_pooling produce stronger, more repeatable features.
 #
-# Retry loop: start at nproc/1 (full) and step the divisor up to nproc/5 on failure
-MAX_DIVISOR=5
+# Retry loop: start at nproc/1 (full) and step the divisor up to nproc/$MAX_DIVISOR on failure
+MAX_DIVISOR=10
 for DIVISOR in $(seq 1 $MAX_DIVISOR); do
     THREADS=$(( $(nproc) / DIVISOR ))
     [ "$THREADS" -lt 1 ] && THREADS=1

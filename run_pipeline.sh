@@ -181,14 +181,12 @@ fi
 echo "============================"
 echo "COLMAP: Sparse Mapping"
 echo "============================"
-# Refining principal point matters for DJI sensors; tighter BA tolerance
-# yields cleaner poses (slower, worth it).
 colmap mapper \
     --database_path "$DATABASE" \
     --image_path "$IMAGES_DIR" \
     --output_path "$SPARSE" \
     --Mapper.ba_refine_principal_point 1 \
-    --Mapper.ba_global_function_tolerance 1e-6
+    --Mapper.ba_use_gpu 1
 
 # ============================
 # Pick largest sub-model
@@ -238,6 +236,7 @@ echo "============================"
 brush "$DENSE" \
     --total-train-iters 60000 \
     --export-every 20000 \
+    --max-splats 5000000 \
     --export-path "$PROJECT_DIR"
 
 echo "Brush Gaussian Splat finished"

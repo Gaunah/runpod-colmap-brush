@@ -2,24 +2,42 @@ ARG UBUNTU_VERSION=24.04
 ARG NVIDIA_CUDA_VERSION=12.9.1
 
 # ==========================================
-# Stage 1: Build COLMAP
+# Stage 1: Build COLMAP (with CUDA-enabled Ceres)
 # ==========================================
 FROM nvidia/cuda:${NVIDIA_CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap-builder
 ENV DEBIAN_FRONTEND=noninteractive
 ARG COLMAP_REF=4.0.4
+ARG CUDSS_VERSION=0.6.0
 
-# Install build dependencies
+# Build dependencies
 RUN apt update && \
-    apt install -y git ccache cmake ninja-build build-essential \
+    apt install -y git ccache cmake ninja-build build-essential wget \
         libboost-program-options-dev libboost-graph-dev libboost-system-dev libeigen3-dev \
-        libopenimageio-dev openimageio-tools libmetis-dev libgoogle-glog-dev libgtest-dev \
-        libgmock-dev libsqlite3-dev libglew-dev qt6-base-dev libqt6opengl6-dev \
-        libqt6openglwidgets6 libqt6svg6-dev libcgal-dev libceres-dev libcurl4-openssl-dev \
-        libssl-dev libmkl-full-dev
+        libopenimageio-dev openimageio-tools libmetis-dev libgoogle-glog-dev libgflags-dev \
+        libgtest-dev libgmock-dev libsqlite3-dev libglew-dev qt6-base-dev libqt6opengl6-dev \
+        libqt6openglwidgets6 libqt6svg6-dev libcgal-dev libcurl4-openssl-dev \
+        libssl-dev libmkl-full-dev libsuitesparse-dev
+
+# Install cuDSS (NVIDIA Direct Sparse Solver) — required for GPU sparse BA
+RUN wget https://developer.download.nvidia.com/compute/cudss/${CUDSS_VERSION}/local_installers/cudss-local-repo-ubuntu2404-${CUDSS_VERSION}_${CUDSS_VERSION}-1_amd64.deb && \
+    dpkg -i cudss-local-repo-*.deb && \
+    cp /var/cudss-local-repo-*/cudss-*-keyring.gpg /usr/share/keyrings/ && \
+    apt update && apt install -y cudss && \
+    rm cudss-local-repo-*.deb
+
+# Build Ceres from source with CUDA + cuDSS
+RUN git clone --depth 1 --recursive --shallow-submodules https://github.com/ceres-solver/ceres-solver.git /ceres && \
+    cd /ceres && mkdir build && cd build && \
+    cmake .. -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DUSE_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES=all-major \
+        -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF && \
+    ninja install
 
 RUN mkdir -p /usr/include/opencv4
 
-# Shallow clone and build COLMAP
+# Build COLMAP — picks up the custom Ceres from /usr/local automatically
 RUN git clone --depth 1 --branch ${COLMAP_REF} https://github.com/colmap/colmap.git /colmap && \
     cd /colmap && \
     mkdir -p build && cd build && \

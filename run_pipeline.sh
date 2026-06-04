@@ -179,14 +179,62 @@ else
 fi
 
 echo "============================"
-echo "COLMAP: Sparse Mapping"
+echo "COLMAP: Sparse Mapping (initial)"
 echo "============================"
 colmap mapper \
     --database_path "$DATABASE" \
     --image_path "$IMAGES_DIR" \
     --output_path "$SPARSE" \
     --Mapper.ba_refine_principal_point 1 \
+    --Mapper.init_min_num_inliers 50 \
+    --Mapper.abs_pose_min_num_inliers 15 \
     --Mapper.ba_use_gpu 1
+
+# ============================
+# Check for split reconstruction, attempt to bridge if found
+# ============================
+NUM_MODELS=$(find "$SPARSE" -mindepth 1 -maxdepth 1 -type d | wc -l)
+
+if [ "$NUM_MODELS" -gt 1 ] && [ "$HAS_GPS" -gt 0 ]; then
+    echo "============================"
+    echo "WARNING: $NUM_MODELS sub-models after spatial matching."
+    echo "Running supplemental vocab tree matching to find missed connections."
+    echo "============================"
+    colmap vocab_tree_matcher \
+        --database_path "$DATABASE" \
+        --VocabTreeMatching.vocab_tree_path "$VOCAB_TREE"
+
+    echo "============================"
+    echo "COLMAP: Sparse Mapping (re-attempt with augmented matches)"
+    echo "============================"
+    # Mapper writes to a *separate* directory so we can compare and pick the
+    # better result. Don't clobber the first attempt — it may still be the
+    # better one if vocab tree introduces bad matches.
+    SPARSE_V2="$PROJECT_DIR/sparse_v2"
+    mkdir -p "$SPARSE_V2"
+    colmap mapper \
+        --database_path "$DATABASE" \
+        --image_path "$IMAGES_DIR" \
+        --output_path "$SPARSE_V2" \
+        --Mapper.ba_refine_principal_point 1 \
+        --Mapper.init_min_num_inliers 50 \
+        --Mapper.abs_pose_min_num_inliers 15 \
+        --Mapper.ba_use_gpu 1
+
+    # Compare: prefer the run with the largest single model
+    LARGEST_V1=$(find "$SPARSE"    -mindepth 1 -maxdepth 1 -type d -exec wc -c {}/images.bin \; 2>/dev/null | sort -rn | head -n1 | awk '{print $1}')
+    LARGEST_V2=$(find "$SPARSE_V2" -mindepth 1 -maxdepth 1 -type d -exec wc -c {}/images.bin \; 2>/dev/null | sort -rn | head -n1 | awk '{print $1}')
+    LARGEST_V1=${LARGEST_V1:-0}
+    LARGEST_V2=${LARGEST_V2:-0}
+
+    echo "Largest model size — v1: $LARGEST_V1 bytes, v2: $LARGEST_V2 bytes"
+    if [ "$LARGEST_V2" -gt "$LARGEST_V1" ]; then
+        echo "Second pass produced a larger model. Using sparse_v2."
+        SPARSE="$SPARSE_V2"
+    else
+        echo "First pass model is still largest. Keeping sparse."
+    fi
+fi
 
 # ============================
 # Pick largest sub-model

@@ -186,9 +186,8 @@ colmap mapper \
     --image_path "$IMAGES_DIR" \
     --output_path "$SPARSE" \
     --Mapper.ba_refine_principal_point 1 \
-    --Mapper.init_min_num_inliers 50 \
-    --Mapper.abs_pose_min_num_inliers 15 \
-    --Mapper.ba_use_gpu 1
+    --Mapper.ba_use_gpu 1 \
+    --Mapper.ba_gpu_index 0
 
 # ============================
 # Check for split reconstruction, attempt to bridge if found
@@ -217,9 +216,8 @@ if [ "$NUM_MODELS" -gt 1 ] && [ "$HAS_GPS" -gt 0 ]; then
         --image_path "$IMAGES_DIR" \
         --output_path "$SPARSE_V2" \
         --Mapper.ba_refine_principal_point 1 \
-        --Mapper.init_min_num_inliers 50 \
-        --Mapper.abs_pose_min_num_inliers 15 \
-        --Mapper.ba_use_gpu 1
+        --Mapper.ba_use_gpu 1 \
+        --Mapper.ba_gpu_index 0
 
     # Compare: prefer the run with the largest single model
     LARGEST_V1=$(find "$SPARSE"    -mindepth 1 -maxdepth 1 -type d -exec wc -c {}/images.bin \; 2>/dev/null | sort -rn | head -n1 | awk '{print $1}')

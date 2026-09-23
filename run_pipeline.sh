@@ -104,9 +104,10 @@ echo "Project dir: $PROJECT_DIR"
 echo "Images dir:  $IMAGES_DIR ($NUM_IMAGES images)"
 
 echo "============================"
-echo "COLMAP: Feature Extraction (OPENCV, single camera)"
+echo "COLMAP: Feature Extraction (SIMPLE_RADIAL, single camera)"
 echo "============================"
-# OPENCV model handles DJI lens distortion; single_camera shares intrinsics
+# SIMPLE_RADIAL because the Caspar BA backend only supports SIMPLE_RADIAL and
+# PINHOLE (other models get skipped); single_camera shares intrinsics
 # across the whole set since all photos came from the same lens.
 # affine_shape + domain_size_pooling produce stronger, more repeatable features.
 #
@@ -119,7 +120,7 @@ for DIVISOR in $(seq 1 $MAX_DIVISOR); do
     if colmap feature_extractor \
         --database_path "$DATABASE" \
         --image_path "$IMAGES_DIR" \
-        --ImageReader.camera_model "OPENCV" \
+        --ImageReader.camera_model "SIMPLE_RADIAL" \
         --ImageReader.single_camera 1 \
         --FeatureExtraction.num_threads "$THREADS" \
         --SiftExtraction.estimate_affine_shape 1 \
@@ -186,7 +187,8 @@ colmap mapper \
     --image_path "$IMAGES_DIR" \
     --output_path "$SPARSE" \
     --Mapper.ba_refine_principal_point 1 \
-    --Mapper.ba_use_gpu 1 \
+    --Mapper.ba_local_backend CASPAR \
+    --Mapper.ba_global_backend CASPAR \
     --Mapper.ba_gpu_index 0
 
 # ============================
@@ -216,7 +218,8 @@ if [ "$NUM_MODELS" -gt 1 ] && [ "$HAS_GPS" -gt 0 ]; then
         --image_path "$IMAGES_DIR" \
         --output_path "$SPARSE_V2" \
         --Mapper.ba_refine_principal_point 1 \
-        --Mapper.ba_use_gpu 1 \
+        --Mapper.ba_local_backend CASPAR \
+        --Mapper.ba_global_backend CASPAR \
         --Mapper.ba_gpu_index 0
 
     # Compare: prefer the run with the largest single model

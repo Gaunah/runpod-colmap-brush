@@ -36,7 +36,7 @@ Everything is staged onto `/local_temp/dataset` for the run. Final outputs land 
 ## Pipeline overview
 
 1. **Stage data** — download/unzip or copy to local NVMe
-2. **Feature extraction** — COLMAP with the OPENCV camera model and shared intrinsics (`single_camera 1`)
+2. **Feature extraction** — COLMAP with the SIMPLE_RADIAL camera model (required by the Caspar BA backend) and shared intrinsics (`single_camera 1`)
 3. **Matching** — auto-selects strategy based on input:
    - Spatial matching when EXIF GPS is present (DJI default)
    - Vocab tree matching for sets > 150 images without GPS

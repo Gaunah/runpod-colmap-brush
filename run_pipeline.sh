@@ -300,7 +300,7 @@ if [ -z "$LATEST_PLY" ]; then
 else
     SOG_OUT="$PROJECT_DIR/scene.sog"
     echo "Compressing: $LATEST_PLY -> $SOG_OUT"
-    splat-transform "$LATEST_PLY" "$SOG_OUT"
+    splat-transform -N -F "$LATEST_PLY" "$SOG_OUT"
     echo "Original PLY: $(du -h "$LATEST_PLY" | cut -f1)"
     echo "Compressed:   $(du -h "$SOG_OUT" | cut -f1)"
 fi

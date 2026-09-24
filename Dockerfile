@@ -1,12 +1,14 @@
 ARG UBUNTU_VERSION=24.04
 ARG NVIDIA_CUDA_VERSION=12.9.1
+# Shared by the COLMAP build and the pycolmap pin so the two stay in sync
+ARG COLMAP_REF=4.2.0
 
 # ==========================================
 # Stage 1: Build COLMAP (with Caspar GPU bundle adjustment)
 # ==========================================
 FROM nvidia/cuda:${NVIDIA_CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap-builder
 ENV DEBIAN_FRONTEND=noninteractive
-ARG COLMAP_REF=4.2.0
+ARG COLMAP_REF
 # Caspar requires compute capability >= 7.5, so "all-major" (which includes
 # sm_50/60/70) can't be used. Turing, Ampere, Ada, Hopper, Blackwell.
 ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"
@@ -69,8 +71,10 @@ RUN apt update && apt upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. JupyterLab + Python deps used by run_pipeline.sh (plyfile/numpy for
-#    the NaN-splat cleanup step before SOG compression)
-RUN pip3 install jupyterlab plyfile numpy --break-system-packages --no-cache-dir
+#    the NaN-splat cleanup step before SOG compression; pycolmap/pillow for
+#    roi_prep.py, pinned to the COLMAP build so model I/O matches)
+ARG COLMAP_REF
+RUN pip3 install jupyterlab plyfile numpy "pycolmap==${COLMAP_REF}" pillow --break-system-packages --no-cache-dir
 
 # 3. Copy binaries from builders
 COPY --from=colmap-builder /colmap-install/ /usr/local/
@@ -87,6 +91,7 @@ RUN mkdir /app
 RUN wget https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin -P /app/
 
 # 6. Pipeline + Jupyter startup scripts
+COPY roi_prep.py /app/roi_prep.py
 COPY run_pipeline.sh /app/run_pipeline.sh
 RUN chmod +x /app/run_pipeline.sh
 COPY start-jupyter.sh /app/start-jupyter.sh

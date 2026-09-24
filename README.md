@@ -51,8 +51,11 @@ Everything is staged onto `/local_temp/dataset` for the run. Final outputs land 
 Local build:
 
 ```bash
-docker build --build-arg COLMAP_REF=3.11.1 -t runpod-colmap-brush:dev .
+docker build --build-arg COLMAP_REF=4.2.0 -t runpod-colmap-brush:dev .
 ```
+
+`COLMAP_REF` also pins the `pycolmap` wheel used by `roi_prep.py`, so it must be
+a release tag that exists on PyPI as `pycolmap==<tag>`.
 
 ## Capture tips for best results
 

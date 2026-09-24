@@ -277,6 +277,44 @@ colmap image_undistorter \
     --output_path "$DENSE" \
     --output_type COLMAP
 
+# Undistortion just rewrote $DENSE/sparse, so ROI outputs from a previous run
+# (backup, GPS-aligned copy, masks) are stale. image_undistorter doesn't touch
+# $DENSE/masks, and Brush would pick up old masks even with ROI disabled.
+ROI_BACKUP="$PROJECT_DIR/dense_sparse_full"
+ROI_ENU="$PROJECT_DIR/dense_sparse_enu"
+rm -rf "$ROI_BACKUP" "$ROI_ENU" "$DENSE/masks" "$DENSE/masks.tmp" "$DENSE/sparse.tmp"
+
+if [ "${ROI_ENABLE:-1}" = "1" ]; then
+    # GPS gives roi_prep.py a true 'up' axis. The aligned copy is only used as a
+    # reference; Brush still trains in the original model frame.
+    if [ "$HAS_GPS" -gt 0 ]; then
+        echo "============================"
+        echo "COLMAP: GPS (ENU) alignment for ROI up axis"
+        echo "============================"
+        mkdir -p "$ROI_ENU"
+        colmap model_aligner \
+            --input_path "$DENSE/sparse" \
+            --output_path "$ROI_ENU" \
+            --database_path "$DATABASE" \
+            --ref_is_gps 1 \
+            --alignment_type enu \
+            --alignment_max_error "${GPS_ALIGN_MAX_ERROR:-3}" \
+            || { echo "WARNING: GPS alignment failed; ROI will estimate 'up' from camera orientations."; rm -rf "$ROI_ENU"; }
+    fi
+
+    echo "============================"
+    echo "ROI: crop init points + write training masks"
+    echo "============================"
+    if ! python3 /app/roi_prep.py "$DENSE" "$ROI_ENU"; then
+        echo "WARNING: ROI prep failed; training on full scene."
+        rm -rf "$DENSE/masks" "$DENSE/masks.tmp" "$DENSE/sparse.tmp"
+        if [ -d "$ROI_BACKUP" ]; then
+            rm -rf "$DENSE/sparse"
+            cp -r "$ROI_BACKUP" "$DENSE/sparse"
+        fi
+    fi
+fi
+
 echo "============================"
 echo "Start Brush Training (on undistorted dense dir)"
 echo "============================"

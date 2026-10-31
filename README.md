@@ -23,11 +23,11 @@ Tuned for DJI drone footage (Mini 5 Pro and friends), but works with any photo s
 # Local folder
 bash /app/run_pipeline.sh /workspace/my_dataset/images
 
-# Or a remote zip (expects an 'images/' folder inside)
+# Or a remote zip (images at the zip root or inside one top-level folder)
 bash /app/run_pipeline.sh https://example.com/dataset.zip
 ```
 
-Everything is staged onto `/local_temp/dataset` for the run. Final outputs land in that project directory:
+No staging: a local folder is used in place and outputs land in its parent directory (`/workspace/my_dataset` above). A zip is unpacked to `/workspace/<zip name>/images` and outputs land in `/workspace/<zip name>`. Re-running with the same URL reuses the unpacked images.
 
 - `sparse_points.ply` — COLMAP sparse point cloud (for sanity checking)
 - `export_60000.ply` — trained Gaussian Splat
@@ -35,7 +35,7 @@ Everything is staged onto `/local_temp/dataset` for the run. Final outputs land 
 
 ## Pipeline overview
 
-1. **Stage data** — download/unzip or copy to local NVMe
+1. **Prepare data** — download/unzip a zip into `/workspace`, or use a local folder in place
 2. **Feature extraction** — COLMAP with the SIMPLE_RADIAL camera model (required by the Caspar BA backend) and shared intrinsics (`single_camera 1`)
 3. **Matching** — auto-selects strategy based on input:
    - Spatial matching when EXIF GPS is present (DJI default)

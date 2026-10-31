@@ -6,7 +6,7 @@ ARG NVIDIA_CUDA_VERSION=12.9.1
 # ==========================================
 FROM nvidia/cuda:${NVIDIA_CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap-builder
 ENV DEBIAN_FRONTEND=noninteractive
-ARG COLMAP_REF=4.2.0
+ARG COLMAP_REF=4.2.1
 # Caspar requires compute capability >= 7.5, so "all-major" (which includes
 # sm_50/60/70) can't be used. Turing, Ampere, Ada, Hopper, Blackwell.
 ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"

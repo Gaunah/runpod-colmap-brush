@@ -10,102 +10,106 @@ nvidia-smi -L >/dev/null 2>&1 || { echo "ERROR: no GPU visible; Brush needs CUDA
 INPUT=${1:-}
 if [ -z "$INPUT" ]; then
     echo "Usage: bash run_pipeline.sh <images_folder | zip_url>"
-    echo "  Local:  bash run_pipeline.sh /workspace/images"
+    echo "  Local:  bash run_pipeline.sh /workspace/my_dataset/images"
+    echo "          (outputs go next to the images folder, in /workspace/my_dataset)"
     echo "  Remote: bash run_pipeline.sh https://example.com/dataset.zip"
+    echo "          (unpacked to and outputs in /workspace/dataset)"
     exit 1
 fi
 
 VOCAB_TREE="/app/vocab_tree_flickr100K_words32K.bin"
-
-# ============================
-# Stage everything on fast local NVMe up front (skip if already staged)
-# ============================
-LOCAL_ROOT="/local_temp/dataset"
-mkdir -p "$LOCAL_ROOT"
+WORK_ROOT="/workspace"
 
 IMAGE_FIND_ARGS=(-type f ! -name '._*' \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.tif' -o -iname '*.tiff' \))
 
-# Locate the image directory under $1 (default: $LOCAL_ROOT): the first
-# top-level folder whose subtree contains image files. Recurses, so nested
-# layouts (wrapper/sub/*.jpg) work: COLMAP reads --image_path recursively, so
-# we hand it the top folder as-is. Skips: sparse/ + dense/ (created by later
-# stages on a re-run), macOS "__MACOSX" wrapper dirs, and AppleDouble "._*"
-# sidecar files (junk that carries a real image extension but isn't a
-# readable image).
+has_images() {
+    find "$@" "${IMAGE_FIND_ARGS[@]}" -print -quit | grep -q .
+}
+
+# Locate the image directory under $1: the first top-level folder whose
+# subtree contains image files. Recurses, so nested layouts (wrapper/sub/*.jpg)
+# work: COLMAP reads --image_path recursively, so we hand it the top folder
+# as-is. Skips macOS "__MACOSX" wrapper dirs, and AppleDouble "._*" sidecar
+# files (junk that carries a real image extension but isn't a readable image).
 find_image_dir() {
-    local root=${1:-$LOCAL_ROOT} d
+    local d
     while IFS= read -r d; do
-        if find "$d" "${IMAGE_FIND_ARGS[@]}" -print -quit | grep -q .; then
+        if has_images "$d"; then
             printf '%s\n' "$d"
             return 0
         fi
-    done < <(find "$root" -mindepth 1 -maxdepth 1 -type d \
-                  ! -name sparse ! -name dense ! -name __MACOSX | sort)
+    done < <(find "$1" -mindepth 1 -maxdepth 1 -type d ! -name __MACOSX | sort)
     return 1
 }
 
 echo "============================"
-echo "Staging Dataset on Local NVMe"
+echo "Preparing Dataset"
 echo "============================"
 
-# If a previous run already staged the images, reuse them.
-EXISTING_IMAGES=$(find_image_dir || true)
-if [ -n "$EXISTING_IMAGES" ]; then
-    echo "Images already staged at: $EXISTING_IMAGES"
-    echo "Skipping download/copy. (Delete $LOCAL_ROOT to force a fresh stage.)"
-    IMAGES_DIR="$EXISTING_IMAGES"
-elif [[ "$INPUT" =~ ^https?:// ]]; then
-    # Remote zip: download + unzip into a scratch dir on NVMe, then move the
-    # images to $LOCAL_ROOT/images. Accepts images at the zip root or inside
-    # one (any-named) top-level folder.
-    UNZIP_DIR="/local_temp/unzip"
-    rm -rf "$UNZIP_DIR"
-    mkdir -p "$UNZIP_DIR"
-    echo "Downloading: $INPUT"
-    pushd "$UNZIP_DIR" > /dev/null
-    aria2c \
-        --continue=true \
-        --max-connection-per-server=16 \
-        --split=16 \
-        --min-split-size=1M \
-        --auto-file-renaming=false \
-        --allow-overwrite=true \
-        "$INPUT"
-    ZIP_FILE=$(ls -t ./*.zip 2>/dev/null | head -n 1 || true)
-    if [ -z "$ZIP_FILE" ]; then
-        echo "ERROR: no .zip file was downloaded."
-        exit 1
-    fi
-    echo "Unzipping: $ZIP_FILE"
-    7z x -y -bso0 -bsp0 "$ZIP_FILE"
-    rm "$ZIP_FILE"
-    rm -rf __MACOSX
-    popd > /dev/null
+if [[ "$INPUT" =~ ^https?:// ]]; then
+    # Remote zip: project dir is named after the zip file
+    NAME=$(basename "${INPUT%%\?*}" .zip)
+    PROJECT_DIR="$WORK_ROOT/${NAME:-dataset}"
+    IMAGES_DIR="$PROJECT_DIR/images"
 
-    if find "$UNZIP_DIR" -maxdepth 1 "${IMAGE_FIND_ARGS[@]}" -print -quit | grep -q .; then
-        # Images zipped directly at the archive root
-        SRC_DIR="$UNZIP_DIR"
+    if [ -d "$IMAGES_DIR" ] && has_images "$IMAGES_DIR"; then
+        echo "Images already present at: $IMAGES_DIR"
+        echo "Skipping download. (Delete $IMAGES_DIR to force a fresh download.)"
     else
-        SRC_DIR=$(find_image_dir "$UNZIP_DIR" || true)
+        # Download + unzip into a scratch dir, then move the images to
+        # $IMAGES_DIR. Accepts images at the zip root or inside one
+        # (any-named) top-level folder.
+        if [ -e "$IMAGES_DIR" ]; then
+            echo "ERROR: $IMAGES_DIR exists but contains no images; remove it first."
+            exit 1
+        fi
+        UNZIP_DIR="$PROJECT_DIR/unzip_tmp"
+        rm -rf "$UNZIP_DIR"
+        mkdir -p "$UNZIP_DIR"
+        echo "Downloading: $INPUT"
+        pushd "$UNZIP_DIR" > /dev/null
+        aria2c \
+            --continue=true \
+            --max-connection-per-server=16 \
+            --split=16 \
+            --min-split-size=1M \
+            --auto-file-renaming=false \
+            --allow-overwrite=true \
+            "$INPUT"
+        ZIP_FILE=$(ls -t ./*.zip 2>/dev/null | head -n 1 || true)
+        if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: no .zip file was downloaded."
+            exit 1
+        fi
+        echo "Unzipping: $ZIP_FILE"
+        7z x -y -bso0 -bsp0 "$ZIP_FILE"
+        rm "$ZIP_FILE"
+        rm -rf __MACOSX
+        popd > /dev/null
+
+        if has_images "$UNZIP_DIR" -maxdepth 1; then
+            # Images zipped directly at the archive root
+            SRC_DIR="$UNZIP_DIR"
+        else
+            SRC_DIR=$(find_image_dir "$UNZIP_DIR" || true)
+        fi
+        if [ -z "$SRC_DIR" ]; then
+            echo "ERROR: no images found inside the archive."
+            exit 1
+        fi
+        mv "$SRC_DIR" "$IMAGES_DIR"
+        rm -rf "$UNZIP_DIR"
     fi
-    if [ -z "$SRC_DIR" ]; then
-        echo "ERROR: no images found inside the archive."
-        exit 1
-    fi
-    mv "$SRC_DIR" "$LOCAL_ROOT/images"
-    rm -rf "$UNZIP_DIR"
-    IMAGES_DIR="$LOCAL_ROOT/images"
 else
+    # Local folder: used in place, outputs go into its parent directory
     if [ ! -d "$INPUT" ]; then
         echo "ERROR: '$INPUT' is not a directory."
         exit 1
     fi
-    echo "Copying: $INPUT -> $LOCAL_ROOT/images"
-    cp -r "$INPUT" "$LOCAL_ROOT/images"
-    IMAGES_DIR="$LOCAL_ROOT/images"
+    IMAGES_DIR=$(realpath "$INPUT")
+    PROJECT_DIR=$(dirname "$IMAGES_DIR")
 fi
 
-PROJECT_DIR=$(dirname "$IMAGES_DIR")
 DATABASE="$PROJECT_DIR/database.db"
 SPARSE="$PROJECT_DIR/sparse"
 DENSE="$PROJECT_DIR/dense"
@@ -327,9 +331,3 @@ echo "  - splat PLY:        ${LATEST_PLY:-<missing>}"
 echo "  - compressed SOG:   $PROJECT_DIR/scene.sog"
 echo "============================"
 
-# Persist deliverables off ephemeral NVMe before the pod can vanish
-PERSIST_DIR="/workspace/outputs/$(basename "$PROJECT_DIR")_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$PERSIST_DIR"
-cp -v "$PROJECT_DIR/scene.sog" "$PERSIST_DIR/" 2>/dev/null || true
-[ -n "${LATEST_PLY:-}" ] && cp -v "$LATEST_PLY" "$PERSIST_DIR/" || true
-cp -rv "$LARGEST_MODEL" "$PERSIST_DIR/sparse" || true

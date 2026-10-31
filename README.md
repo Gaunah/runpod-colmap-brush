@@ -23,7 +23,7 @@ Tuned for DJI drone footage (Mini 5 Pro and friends), but works with any photo s
 # Local folder
 bash /app/run_pipeline.sh /workspace/my_dataset/images
 
-# Or a remote zip (expects an 'images/' folder inside)
+# Or a remote zip (images at the zip root or inside one top-level folder)
 bash /app/run_pipeline.sh https://example.com/dataset.zip
 ```
 

@@ -23,23 +23,23 @@ VOCAB_TREE="/app/vocab_tree_flickr100K_words32K.bin"
 LOCAL_ROOT="/local_temp/dataset"
 mkdir -p "$LOCAL_ROOT"
 
-# Locate the staged image directory: the first top-level folder under
-# $LOCAL_ROOT whose subtree contains image files. Takes the first folder from
-# the zip that holds images. Recurses, so nested layouts (wrapper/sub/*.jpg)
-# work: COLMAP reads --image_path recursively, so we hand it the top folder
-# as-is. Skips: sparse/ + dense/ (created by later stages on a re-run), macOS
-# "__MACOSX" wrapper dirs, and AppleDouble "._*" sidecar files (junk that
-# carries a real image extension but isn't a readable image).
+IMAGE_FIND_ARGS=(-type f ! -name '._*' \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.tif' -o -iname '*.tiff' \))
+
+# Locate the image directory under $1 (default: $LOCAL_ROOT): the first
+# top-level folder whose subtree contains image files. Recurses, so nested
+# layouts (wrapper/sub/*.jpg) work: COLMAP reads --image_path recursively, so
+# we hand it the top folder as-is. Skips: sparse/ + dense/ (created by later
+# stages on a re-run), macOS "__MACOSX" wrapper dirs, and AppleDouble "._*"
+# sidecar files (junk that carries a real image extension but isn't a
+# readable image).
 find_image_dir() {
-    local d
+    local root=${1:-$LOCAL_ROOT} d
     while IFS= read -r d; do
-        if find "$d" -type f ! -name '._*' \
-            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-               -o -iname '*.tif' -o -iname '*.tiff' \) -print -quit | grep -q .; then
+        if find "$d" "${IMAGE_FIND_ARGS[@]}" -print -quit | grep -q .; then
             printf '%s\n' "$d"
             return 0
         fi
-    done < <(find "$LOCAL_ROOT" -mindepth 1 -maxdepth 1 -type d \
+    done < <(find "$root" -mindepth 1 -maxdepth 1 -type d \
                   ! -name sparse ! -name dense ! -name __MACOSX | sort)
     return 1
 }
@@ -55,9 +55,14 @@ if [ -n "$EXISTING_IMAGES" ]; then
     echo "Skipping download/copy. (Delete $LOCAL_ROOT to force a fresh stage.)"
     IMAGES_DIR="$EXISTING_IMAGES"
 elif [[ "$INPUT" =~ ^https?:// ]]; then
-    # Remote zip: download + unzip directly on NVMe
+    # Remote zip: download + unzip into a scratch dir on NVMe, then move the
+    # images to $LOCAL_ROOT/images. Accepts images at the zip root or inside
+    # one (any-named) top-level folder.
+    UNZIP_DIR="/local_temp/unzip"
+    rm -rf "$UNZIP_DIR"
+    mkdir -p "$UNZIP_DIR"
     echo "Downloading: $INPUT"
-    pushd "$LOCAL_ROOT" > /dev/null
+    pushd "$UNZIP_DIR" > /dev/null
     aria2c \
         --continue=true \
         --max-connection-per-server=16 \
@@ -74,13 +79,22 @@ elif [[ "$INPUT" =~ ^https?:// ]]; then
     echo "Unzipping: $ZIP_FILE"
     7z x -y -bso0 -bsp0 "$ZIP_FILE"
     rm "$ZIP_FILE"
+    rm -rf __MACOSX
     popd > /dev/null
 
-    IMAGES_DIR=$(find_image_dir || true)
-    if [ -z "$IMAGES_DIR" ]; then
-        echo "ERROR: no folder containing images found inside the archive."
+    if find "$UNZIP_DIR" -maxdepth 1 "${IMAGE_FIND_ARGS[@]}" -print -quit | grep -q .; then
+        # Images zipped directly at the archive root
+        SRC_DIR="$UNZIP_DIR"
+    else
+        SRC_DIR=$(find_image_dir "$UNZIP_DIR" || true)
+    fi
+    if [ -z "$SRC_DIR" ]; then
+        echo "ERROR: no images found inside the archive."
         exit 1
     fi
+    mv "$SRC_DIR" "$LOCAL_ROOT/images"
+    rm -rf "$UNZIP_DIR"
+    IMAGES_DIR="$LOCAL_ROOT/images"
 else
     if [ ! -d "$INPUT" ]; then
         echo "ERROR: '$INPUT' is not a directory."
@@ -97,8 +111,7 @@ SPARSE="$PROJECT_DIR/sparse"
 DENSE="$PROJECT_DIR/dense"
 mkdir -p "$SPARSE" "$DENSE"
 
-NUM_IMAGES=$(find "$IMAGES_DIR" -type f ! -name '._*' \
-    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tif" -o -iname "*.tiff" \) | wc -l)
+NUM_IMAGES=$(find "$IMAGES_DIR" "${IMAGE_FIND_ARGS[@]}" | wc -l)
 
 echo "Project dir: $PROJECT_DIR"
 echo "Images dir:  $IMAGES_DIR ($NUM_IMAGES images)"
